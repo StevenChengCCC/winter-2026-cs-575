@@ -77,3 +77,9 @@ data/*
 *.tar.gz
 *.gz
 *.bz2
+
+# Homework keys
+keys/
+
+# Figures for slides
+figures_for_slides/

@@ -2,7 +2,7 @@ import networkx as nx  # type: ignore
 import numpy as np
 from numpy.typing import NDArray
 from collections import Counter
-from typing import Tuple
+from typing import Hashable
 
 
 ####################
@@ -30,24 +30,23 @@ def get_degree_count_dictionary(G: nx.Graph) -> dict[int, int]:
 ## Graph Creation ##
 ####################
 
-def vertex_edge_sets_to_graph(V: set[int], E: set[tuple[int]]) -> nx.Graph:
+def vertex_edge_sets_to_graph(V: set[Hashable], E: tuple[Hashable, Hashable]) -> nx.Graph:
     if len(V) == 0:
         raise IllegalGraphRepresentation("Vertex set cannot be empty")
 
     # Validate that all edges reference vertices in the vertex set
     for edge in E:
+        if not isinstance(edge, tuple):
+                raise IllegalGraphRepresentation(f"Edge {edge} is not a tuple")
+        if len(edge) != 2:
+            raise IllegalGraphRepresentation(
+                f"Edge {edge} must contain exactly 2 vertices"
+            )
         u, v = edge
+        
         if u not in V or v not in V:
             raise IllegalGraphRepresentation(
                 f"Edge {edge} contains vertices not in vertex set"
-            )
-
-    # Validate that edges are symmetric (required for undirected graphs)
-    for edge in E:
-        u, v = edge
-        if (v, u) not in E:
-            raise IllegalGraphRepresentation(
-                f"Edge set is not symmetric: edge {edge} exists but {(v, u)} does not"
             )
 
     G = nx.Graph()
