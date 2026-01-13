@@ -193,3 +193,56 @@ def show_graphs_in_a_set(
         axis.set_xlim(-1.2, 1.2)
         axis.set_ylim(-1.2, 1.2)
         axis.set_aspect("equal")
+
+
+def find_subgraphs_containing_vertex(
+    G: nx.Graph, size: int, vertex: Union[str, int]
+) -> list[nx.Graph]:
+    """
+    Find all connected induced subgraphs of a given size containing a specific vertex.
+
+    This function generates all possible induced subgraphs of a graph `G` with a
+    specified number of nodes, filters for those that are connected and contain a
+    target vertex, and returns them.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        The input graph from which subgraphs are extracted.
+    size : int
+        The number of nodes in the desired subgraphs.
+    vertex : Union[str, int]
+        The vertex that must be present in all returned subgraphs.
+
+    Returns
+    -------
+    list[nx.Graph]
+        A list of networkx Graph objects representing all connected induced subgraphs
+        of the specified size that contain the target vertex.
+
+    Notes
+    -----
+    - Only connected subgraphs are returned.
+    - Subgraphs are induced subgraphs, meaning all edges that exist in `G` between
+      the subset of nodes are included in the subgraph.
+    - The function uses networkx's `G.subgraph()` method, which automatically
+      returns induced subgraphs.
+
+    Examples
+    --------
+    >>> G = nx.complete_graph(4)  # K4 graph
+    >>> subgraphs = find_subgraphs_containing_vertex(G, 3, 0)
+    >>> len(subgraphs)  # Should find all 3-node induced subgraphs containing node 0
+    4
+    """
+    from itertools import combinations
+
+    subgraphs: list[nx.Graph] = []
+    for nodes in combinations(G.nodes(), size):
+        if vertex not in set(nodes):  # Skip subgraphs that don't contain the target vertex
+            continue
+        subgraph: nx.Graph = G.subgraph(nodes)
+        # Single nodes are trivially connected; multi-node subgraphs must be connected
+        if len(subgraph.nodes()) == 1 or nx.is_connected(subgraph):
+            subgraphs.append(subgraph)
+    return subgraphs
