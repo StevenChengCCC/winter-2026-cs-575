@@ -1,9 +1,51 @@
-"""Utility functions for working with graphlets and graph visualization."""
+"""Utility functions for working with graphlets and graphlet visualization."""
 
-from typing import Union
+from typing import Union, Callable
+from itertools import combinations
 import numpy as np
-import networkx as nx
+import networkx as nx # type: ignore
+import networkx.algorithms.isomorphism as iso
 import matplotlib.pyplot as plt
+
+
+def show_graph(G: nx.Graph, 
+               title: str, 
+               labels: dict[Union[str, int], str],
+               layout: Callable = nx.circular_layout,
+               size: int = 2,
+               node_color: str = 'cyan') -> None:
+    """
+    Display a graph with specified layout and styling.
+    
+    Parameters
+    ----------
+    G : nx.Graph
+        The graph to display.
+    title : str
+        Title for the plot.
+    labels : dict[Union[str, int], str]
+        Dictionary mapping node identifiers to their display labels.
+    layout : Callable, optional
+        A networkx layout function (e.g., nx.circular_layout, nx.spring_layout).
+        Default is nx.circular_layout.
+    size : int, optional
+        Figure size (size x size). Default is 2.
+    node_color : str, optional
+        Color for the nodes. Default is 'cyan'.
+    """
+    _ = plt.figure(figsize=(size, size))
+    pos = layout(G)
+    nx.draw(G, 
+            pos, 
+            node_color=node_color, 
+            alpha=0.8, 
+            node_size=300, 
+            labels=labels)
+    ax = plt.gca()
+    ax.set_xlim(-1.2, 1.2)
+    ax.set_ylim(-1.2, 1.2)
+    ax.set_aspect('equal')
+    ax.set_title(title)
 
 
 def calculate_subplot_grid(num_graphs: int, num_cols: int = 4) -> tuple[int, int]:
@@ -246,3 +288,122 @@ def find_subgraphs_containing_vertex(
         if len(subgraph.nodes()) == 1 or nx.is_connected(subgraph):
             subgraphs.append(subgraph)
     return subgraphs
+
+
+def rooted_is_isomorphic(G1: nx.Graph, G2: nx.Graph, root: Union[str, int]) -> bool:
+    """
+    Check if two graphs are isomorphic with a fixed root vertex.
+    
+    This function determines whether two graphs are rooted isomorphic, meaning
+    there exists an edge-preserving bijection φ: V(G1) → V(G2) such that
+    φ(root) = root. In other words, the graphs must be isomorphic AND there
+    must be at least one isomorphism mapping that keeps the root vertex fixed.
+    
+    Parameters
+    ----------
+    G1 : networkx.Graph
+        The first graph to compare.
+    G2 : networkx.Graph
+        The second graph to compare.
+    root : str or int
+        The root vertex that must be fixed in the isomorphism mapping.
+        This vertex must exist in both G1 and G2.
+    
+    Returns
+    -------
+    bool
+        True if the graphs are rooted isomorphic (i.e., isomorphic with a
+        root-fixing mapping), False otherwise.
+    
+    Notes
+    -----
+    The algorithm follows these steps:
+    1. Check if G1 and G2 are isomorphic as unrooted graphs
+    2. If they are, enumerate all possible isomorphism mappings
+    3. Check if any mapping satisfies φ(root) = root
+    4. Return True if such a mapping exists, False otherwise
+    
+    Examples
+    --------
+    >>> # Two path graphs: A-B-C and A-C-B
+    >>> G1 = nx.Graph([('A','B'), ('B','C')])
+    >>> G2 = nx.Graph([('A','C'), ('C','B')])
+    >>> rooted_is_isomorphic(G1, G2, 'A')
+    False  # A is at different positions in the two graphs
+    """
+    # Step 1: Create a GraphMatcher to check for isomorphism
+    # This checks if there exists any edge-preserving bijection φ: V(G1) → V(G2)
+    GM = iso.GraphMatcher(G1, G2)
+    
+    # Step 2: Check if the graphs are isomorphic (unrooted)
+    if GM.is_isomorphic():
+        # Step 3: Enumerate all possible isomorphism mappings φ
+        for mapping in GM.isomorphisms_iter():
+            # Step 4: Check if this mapping satisfies φ(root) = root
+            if mapping[root] == root:
+                # Found a root-fixing isomorphism!
+                return True
+    
+    # No root-fixing isomorphism exists
+    return False
+
+
+def find_all_graphlets(nodes: list[Union[str, int]], root: Union[str, int]) -> list[nx.Graph]:
+    """
+    Find all non-isomorphic connected rooted graphs on a given set of nodes.
+    
+    This function generates all possible graphs that can be constructed from a given
+    set of nodes, filters for connected graphs, and then removes all but one
+    representative from each rooted isomorphism class. The result is a set of rooted
+    graphlets - graphs that are pairwise non-isomorphic (with the root fixed) and connected.
+    
+    Parameters
+    ----------
+    nodes : list[Union[str, int]]
+        A list of node identifiers. Can be strings, integers, or a mix.
+    root : Union[str, int]
+        The designated root vertex for the rooted isomorphism classification.
+        This vertex must be present in the nodes list.
+    
+    Returns
+    -------
+    list[nx.Graph]
+        A list of networkx Graph objects, where each graph represents one
+        rooted isomorphism equivalence class. All graphs are connected and
+        pairwise non-isomorphic (with respect to rooted isomorphism).
+    
+    Notes
+    -----
+    - The function generates all possible subsets of edges, which is exponential
+      in the number of edges (2^n_edges possibilities).
+    - Only connected graphs are retained.
+    - Rooted isomorphism checking is performed to keep only one representative per class.
+    - The root vertex is fixed during isomorphism checking, meaning two rooted
+      graphlets are considered isomorphic only if they map to each other while
+      keeping the root vertex fixed.
+    
+    Examples
+    --------
+    >>> graphlets = find_all_graphlets(['A', 'B', 'C'], 'A')
+    >>> len(graphlets)  # Should be 4 rooted graphlets on 3 nodes with root A
+    4
+    """
+    all_graphs = []
+    # Generate all possible edges
+    possible_edges = list(combinations(nodes, 2))
+
+    # Generate all possible graphs
+    for i in range(2**len(possible_edges)):
+        edges = [possible_edges[j] for j in range(len(possible_edges)) if (i >> j) & 1]
+        G = nx.Graph()
+        G.add_nodes_from(nodes)
+        G.add_edges_from(edges)
+        if nx.is_connected(G):
+            all_graphs.append(G)
+
+    # Only keep one graph from each rooted isomorphism class
+    unique_graphs = []
+    for G in all_graphs:
+        if not any(rooted_is_isomorphic(G, H, root) for H in unique_graphs):
+            unique_graphs.append(G)
+    return unique_graphs
